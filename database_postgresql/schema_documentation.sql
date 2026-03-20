@@ -1,0 +1,210 @@
+-- ============================================================
+-- Travel Planner Pro - PostgreSQL Schema Documentation
+-- ============================================================
+-- This file documents the complete database schema.
+-- All statements were executed individually via psql CLI.
+-- Connection: psql postgresql://appuser:dbuser123@localhost:5000/myapp
+-- ============================================================
+
+-- =========================
+-- EXTENSIONS
+-- =========================
+-- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- =========================
+-- ENUM TYPES
+-- =========================
+-- CREATE TYPE user_role AS ENUM ('user', 'admin');
+-- CREATE TYPE trip_status AS ENUM ('planning', 'active', 'completed', 'cancelled');
+-- CREATE TYPE activity_category AS ENUM ('sightseeing', 'food', 'transport', 'accommodation', 'shopping', 'entertainment', 'nature', 'culture', 'other');
+-- CREATE TYPE expense_category AS ENUM ('flights', 'accommodation', 'food', 'transport', 'activities', 'shopping', 'insurance', 'visa', 'other');
+-- CREATE TYPE share_permission AS ENUM ('view', 'edit');
+-- CREATE TYPE notification_type AS ENUM ('trip_reminder', 'share_invite', 'trip_update', 'budget_alert', 'system');
+-- CREATE TYPE admin_action AS ENUM ('ban_user', 'unban_user', 'delete_trip', 'delete_user', 'update_role', 'system_config');
+
+-- =========================
+-- TABLES
+-- =========================
+
+-- users: Stores registered user accounts with authentication and role info
+-- CREATE TABLE users (
+--     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--     email VARCHAR(255) NOT NULL UNIQUE,
+--     password_hash VARCHAR(255) NOT NULL,
+--     display_name VARCHAR(100) NOT NULL,
+--     avatar_url TEXT,
+--     role user_role NOT NULL DEFAULT 'user',
+--     is_active BOOLEAN NOT NULL DEFAULT true,
+--     last_login TIMESTAMPTZ,
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- );
+
+-- trips: Stores trip plans with destination, dates, status, and map coordinates
+-- CREATE TABLE trips (
+--     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--     owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+--     title VARCHAR(255) NOT NULL,
+--     description TEXT,
+--     destination VARCHAR(255) NOT NULL,
+--     cover_image_url TEXT,
+--     start_date DATE NOT NULL,
+--     end_date DATE NOT NULL,
+--     status trip_status NOT NULL DEFAULT 'planning',
+--     latitude DOUBLE PRECISION,
+--     longitude DOUBLE PRECISION,
+--     timezone VARCHAR(50),
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     CONSTRAINT check_dates CHECK (end_date >= start_date)
+-- );
+
+-- itinerary_days: Day-by-day breakdown of a trip itinerary
+-- CREATE TABLE itinerary_days (
+--     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--     trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+--     day_number INTEGER NOT NULL,
+--     date DATE NOT NULL,
+--     title VARCHAR(255),
+--     notes TEXT,
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     CONSTRAINT unique_trip_day UNIQUE (trip_id, day_number)
+-- );
+
+-- activities: Individual activities/places within an itinerary day
+-- CREATE TABLE activities (
+--     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--     itinerary_day_id UUID NOT NULL REFERENCES itinerary_days(id) ON DELETE CASCADE,
+--     title VARCHAR(255) NOT NULL,
+--     description TEXT,
+--     location VARCHAR(255),
+--     latitude DOUBLE PRECISION,
+--     longitude DOUBLE PRECISION,
+--     start_time TIME,
+--     end_time TIME,
+--     category activity_category NOT NULL DEFAULT 'other',
+--     estimated_cost DECIMAL(12,2) DEFAULT 0,
+--     currency VARCHAR(3) DEFAULT 'USD',
+--     notes TEXT,
+--     sort_order INTEGER NOT NULL DEFAULT 0,
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- );
+
+-- budgets: Per-trip budget allocation
+-- CREATE TABLE budgets (
+--     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--     trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+--     total_budget DECIMAL(12,2) NOT NULL DEFAULT 0,
+--     currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     CONSTRAINT unique_trip_budget UNIQUE (trip_id)
+-- );
+
+-- expenses: Individual expense records linked to a budget
+-- CREATE TABLE expenses (
+--     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--     budget_id UUID NOT NULL REFERENCES budgets(id) ON DELETE CASCADE,
+--     title VARCHAR(255) NOT NULL,
+--     amount DECIMAL(12,2) NOT NULL,
+--     currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+--     category expense_category NOT NULL DEFAULT 'other',
+--     date DATE,
+--     notes TEXT,
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- );
+
+-- packing_items: Checklist items for trip packing
+-- CREATE TABLE packing_items (
+--     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--     trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+--     name VARCHAR(255) NOT NULL,
+--     quantity INTEGER NOT NULL DEFAULT 1,
+--     is_packed BOOLEAN NOT NULL DEFAULT false,
+--     category VARCHAR(100) DEFAULT 'general',
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- );
+
+-- trip_shares: Sharing trips with other users (view/edit permissions)
+-- CREATE TABLE trip_shares (
+--     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--     trip_id UUID NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+--     shared_with_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+--     permission share_permission NOT NULL DEFAULT 'view',
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+--     CONSTRAINT unique_trip_share UNIQUE (trip_id, shared_with_id)
+-- );
+
+-- notifications: User notifications for reminders, shares, alerts
+-- CREATE TABLE notifications (
+--     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+--     type notification_type NOT NULL,
+--     title VARCHAR(255) NOT NULL,
+--     message TEXT NOT NULL,
+--     is_read BOOLEAN NOT NULL DEFAULT false,
+--     related_trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- );
+
+-- admin_logs: Audit trail for admin actions
+-- CREATE TABLE admin_logs (
+--     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+--     admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+--     action admin_action NOT NULL,
+--     target_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+--     target_trip_id UUID REFERENCES trips(id) ON DELETE SET NULL,
+--     details TEXT,
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- );
+
+-- =========================
+-- INDEXES
+-- =========================
+-- CREATE INDEX idx_users_email ON users(email);
+-- CREATE INDEX idx_users_role ON users(role);
+-- CREATE INDEX idx_trips_owner_id ON trips(owner_id);
+-- CREATE INDEX idx_trips_status ON trips(status);
+-- CREATE INDEX idx_trips_start_date ON trips(start_date);
+-- CREATE INDEX idx_itinerary_days_trip_id ON itinerary_days(trip_id);
+-- CREATE INDEX idx_activities_day_id ON activities(itinerary_day_id);
+-- CREATE INDEX idx_activities_category ON activities(category);
+-- CREATE INDEX idx_expenses_budget_id ON expenses(budget_id);
+-- CREATE INDEX idx_expenses_category ON expenses(category);
+-- CREATE INDEX idx_packing_items_trip_id ON packing_items(trip_id);
+-- CREATE INDEX idx_trip_shares_trip_id ON trip_shares(trip_id);
+-- CREATE INDEX idx_trip_shares_shared_with ON trip_shares(shared_with_id);
+-- CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+-- CREATE INDEX idx_notifications_is_read ON notifications(is_read);
+-- CREATE INDEX idx_admin_logs_admin_id ON admin_logs(admin_id);
+-- CREATE INDEX idx_admin_logs_action ON admin_logs(action);
+
+-- =========================
+-- SEED DATA SUMMARY
+-- =========================
+-- Users: 4 (1 admin + 3 regular users)
+--   - admin@travelplanner.com (Admin User, role=admin)
+--   - alice@example.com (Alice Johnson, role=user)
+--   - bob@example.com (Bob Smith, role=user)
+--   - carol@example.com (Carol Davis, role=user)
+--
+-- Trips: 3
+--   - Paris Adventure (Alice, planning, Mar 15-22 2025)
+--   - Tokyo Discovery (Alice, planning, May 1-10 2025)
+--   - NYC Weekend (Bob, active, Apr 5-7 2025)
+--
+-- Itinerary Days: 3 (for Paris trip, days 1-3)
+-- Activities: 4 (Eiffel Tower, Dinner, Louvre, Seine Cruise)
+-- Budgets: 3 (one per trip)
+-- Expenses: 8 (flights, hotels, activities, dining)
+-- Packing Items: 9 (passport, electronics, clothing, toiletries)
+-- Trip Shares: 3 (Bob edits Paris, Carol views Paris, Alice views NYC)
+-- Notifications: 5 (reminders, share invites, budget alerts)
+-- Admin Logs: 2 (role update, system config)
+--
+-- All passwords use bcrypt hash: password123
